@@ -1,0 +1,33 @@
+:root {
+  --gold: #C9A84C;
+  --gold-lt: #E8C97A;
+  --gold-dk: #9B7A1E;
+  --navy: #0D1B2A;
+  --navy-lt: #16283D;
+  --navy-md: #1E3452;
+  --cream: #F8F5EF;
+  --cream-lt: #FFFFFF;
+  --cream-md: #EDE6D6;
+  --ink: #1A2640;
+  --muted: #5A6E85;
+  --border: #E4DCC8;
+
+  --danger: #C0392B;
+  --danger-bg: #FBEAE8;
+  --success: #1E8449;
+  --success-bg: #E9F7EF;
+  --warning: #B9770E;
+  --warning-bg: #FDF3E3;
+  --info: #2471A3;
+  --info-bg: #EAF2F8;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 8px 32px rgba(13, 27, 42, 0.10);
+  --shadow-sm: 0 2px 10px rgba(13, 27, 42, 0.08);
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  --sidebar-w: 268px;
+  --topbar-h: 64px;
+  --font: 'Segoe UI', Tahoma, 'Cairo', 'Noto Kufi Arabic', sans-serif;
+}
