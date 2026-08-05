@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D1B2A"/>
+      <stop offset="1" stop-color="#16283D"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8C97A"/>
+      <stop offset="1" stop-color="#C9A84C"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)" stroke="#9B7A1E" stroke-width="1.5"/>
+  <text x="32" y="43" font-family="Segoe UI, Tahoma, sans-serif" font-size="30" font-weight="800" text-anchor="middle" fill="url(#gold)">H</text>
+</svg>
