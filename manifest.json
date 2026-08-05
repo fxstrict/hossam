@@ -1,0 +1,43 @@
+{
+  "id": "/",
+  "name": "Hossam License Manager Pro",
+  "short_name": "HLM Pro",
+  "description": "مركز إدارة عملاء وتراخيص نظام الحسام للمحاماة",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#F8F5EF",
+  "theme_color": "#0D1B2A",
+  "dir": "rtl",
+  "lang": "ar",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "إصدار ترخيص جديد",
+      "short_name": "ترخيص جديد",
+      "url": "./index.html#/licenses/new",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "العملاء",
+      "short_name": "العملاء",
+      "url": "./index.html#/customers",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "لوحة التحكم",
+      "short_name": "Dashboard",
+      "url": "./index.html#/dashboard",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
