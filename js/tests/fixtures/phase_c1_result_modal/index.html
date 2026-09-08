@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<!-- Every script below is the REAL, unmodified-by-this-test, current
+     production file — copied read-only for serving (byte-identity
+     verified before this test ran). No mocks for DOM, clipboard, or
+     modal lifecycle: this exercises the actual shipped
+     licenseResultModal.js in a real Chrome renderer. -->
+<script src="/js/Shell.js"></script>
+<script src="/js/Toast.js"></script>
+<script src="/js/Modal.js"></script>
+<script src="/js/qrcode.js"></script>
+<script src="/js/LicenseIssuer.js"></script>
+<script src="/js/licenseResultModal.js"></script>
+<script>
+  var FAKE_LICENSE_FILE = {
+    v: 1, alg: 'ECDSA-P256-SHA256',
+    payload: {
+      licenseId: 'HSM-LIC-TESTID01', edition: 'Professional', type: 'yearly',
+      expiresAt: '2027-01-01T00:00:00.000Z', machineId: 'HSM-AAAA-BBBB-CCCC'
+    },
+    signature: 'fake-signature-not-real-crypto-not-needed-for-this-ui-test'
+  };
+  var FAKE_RECORD = { id: 'rec-1', licenseFile: FAKE_LICENSE_FILE };
+  var FAKE_CUSTOMER = { id: 'cust-1', officeName: 'مكتب تجريبي', phone: '966500000000', email: 'test@example.com' };
+  var FAKE_PLAINTEXT_CODE = 'ABCD-EFGH-JKMN-PQRS-TVWX-YZ01-23';
+
+  window.__c1_showWithCode = function () {
+    window.HLMLicenseResultModal.show(FAKE_RECORD, FAKE_CUSTOMER, FAKE_PLAINTEXT_CODE);
+  };
+  window.__c1_showWithoutCode = function () {
+    window.HLMLicenseResultModal.show(FAKE_RECORD, FAKE_CUSTOMER); // simulates activation-code generation having failed
+  };
+  window.__c1_closeModal = function () {
+    window.HLMModal.close();
+  };
+  window.__c1_domSnapshot = function () {
+    var overlay = document.querySelector('.hlm-modal-overlay');
+    return {
+      overlayHTML: overlay ? overlay.innerHTML : null, // scoped to the actual modal container only —
+                                                        // NOT document.body (which also contains this
+                                                        // very test harness's own <script> source text,
+                                                        // itself literally containing the fake plaintext
+                                                        // code string as a JS string literal — checking
+                                                        // the whole body would produce a false positive
+                                                        // that has nothing to do with the modal itself)
+      hasActivationCodeBtn: !!document.getElementById('hlmCopyActivationCodeBtn'),
+      hasActivationCodeValueEl: !!document.getElementById('hlmActivationCodeValue'),
+      activationCodeText: document.getElementById('hlmActivationCodeValue') ? document.getElementById('hlmActivationCodeValue').textContent : null,
+      hasLicenseCopyBtn: !!document.getElementById('hlmCopyLicenseBtn'),
+      overlayContainsPlaintext: overlay ? overlay.innerHTML.indexOf(FAKE_PLAINTEXT_CODE) !== -1 : false,
+      overlayExistsAtAll: !!overlay
+    };
+  };
+  window.__c1_clickActivationCopy = function () {
+    document.getElementById('hlmCopyActivationCodeBtn').click();
+  };
+  window.__c1_clickLicenseCopy = function () {
+    document.getElementById('hlmCopyLicenseBtn').click();
+  };
+  window.__c1_readClipboard = async function () {
+    return navigator.clipboard.readText();
+  };
+</script>
+</body></html>
