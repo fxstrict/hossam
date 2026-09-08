@@ -37,6 +37,8 @@
         document.getElementById('hlmModalCancel').addEventListener('click', window.HLMModal.close);
         document.getElementById('hlmRenewConfirm').addEventListener('click', async function () {
           var type = document.getElementById('hlmRenewType').value;
+          var confirmBtn = this;
+          confirmBtn.disabled = true; // PHASE C.1 — local in-flight guard, same rationale as licenseWizard.js
           try {
             var record = await window.HLMLicenseIssuer.issue({
               customerId: customer.id, deviceId: activeDevice.id, machineId: activeDevice.machineId,
@@ -45,10 +47,30 @@
               graceDays: sub ? sub.graceDays : settings.defaultGraceDays
             }, 'renewal', window.HLMAuth.currentUser());
             window.HLMToast.success('تم تجديد الاشتراك بنجاح');
+
+            // PHASE C.1 — renewal produces a brand-new licenseId (issue()
+            // never receives an existing one — see the forensic audit),
+            // so it needs its own new activation code; the old license's
+            // code must not be reused. Isolated try/catch: a failure
+            // here must not be reported as a renewal failure, and must
+            // not trigger another issue() call.
+            var plaintextCode;
+            try {
+              var activationResult = await window.HLMLicenseIssuer.issueActivationCode({
+                licenseId: record.licenseFile.payload.licenseId,
+                customerId: customer.id
+              }, window.HLMAuth.currentUser());
+              plaintextCode = activationResult.plaintextCode;
+            } catch (codeErr) {
+              window.HLMToast.error('تم التجديد بنجاح، لكن تعذّر توليد كود التفعيل');
+            }
+
             window.HLMModal.close();
-            window.HLMLicenseResultModal.show(record, customer);
+            window.HLMLicenseResultModal.show(record, customer, plaintextCode);
           } catch (e) {
             window.HLMToast.error(e.message === 'key_not_loaded' ? 'يجب تحميل مفتاح التوقيع أولًا' : 'حدث خطأ أثناء التجديد');
+          } finally {
+            confirmBtn.disabled = false;
           }
         });
       }
@@ -72,6 +94,7 @@
       onMount: function () {
         document.getElementById('hlmModalCancel').addEventListener('click', window.HLMModal.close);
         document.getElementById('hlmTransferConfirm').addEventListener('click', async function () {
+          var confirmBtn = this;
           var newId = document.getElementById('hlmNewMachineId').value.trim().toUpperCase();
           var errEl = document.getElementById('hlmTransferError');
           if (!window.HLMDevicesRepository.isValidMachineId(newId)) {
@@ -79,6 +102,10 @@
             errEl.classList.remove('hlm-hidden');
             return;
           }
+          confirmBtn.disabled = true; // PHASE C.1 — local in-flight guard, set before any
+                                       // async work in this handler (including the pre-existing
+                                       // device transfer() call) so a duplicate click cannot
+                                       // trigger a second transfer/issue/activation-code cycle
           var actor = window.HLMAuth.currentUser();
           var newDevice = await window.HLMDevicesRepository.transfer(activeDevice.id, newId, actor);
           try {
@@ -89,10 +116,28 @@
               graceDays: sub ? sub.graceDays : window.HLM_DEFAULT_SETTINGS.defaultGraceDays
             }, 'transfer', actor);
             window.HLMToast.success('تم نقل الجهاز وإصدار ترخيص جديد');
+
+            // PHASE C.1 — transfer produces a brand-new licenseId (same
+            // as renewal — see the forensic audit), so it needs its own
+            // new activation code; the previous license's code must not
+            // be reused. Isolated try/catch, same rationale as openRenew().
+            var plaintextCode;
+            try {
+              var activationResult = await window.HLMLicenseIssuer.issueActivationCode({
+                licenseId: record.licenseFile.payload.licenseId,
+                customerId: customer.id
+              }, actor);
+              plaintextCode = activationResult.plaintextCode;
+            } catch (codeErr) {
+              window.HLMToast.error('تم النقل بنجاح، لكن تعذّر توليد كود التفعيل');
+            }
+
             window.HLMModal.close();
-            window.HLMLicenseResultModal.show(record, customer);
+            window.HLMLicenseResultModal.show(record, customer, plaintextCode);
           } catch (e) {
             window.HLMToast.error('حدث خطأ أثناء إصدار الترخيص الجديد');
+          } finally {
+            confirmBtn.disabled = false;
           }
         });
       }

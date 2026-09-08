@@ -81,7 +81,20 @@
       if (state.step > 1) { state.step--; renderAll(); }
     });
     document.getElementById('hlmWizardNext').addEventListener('click', async function () {
-      if (state.step === 7) { await generate(state, container); return; }
+      if (state.step === 7) {
+        var nextBtn = this;
+        nextBtn.disabled = true; // PHASE C.1 — local in-flight guard: prevents a duplicate
+                                  // click from calling generate() (and therefore
+                                  // issueActivationCode()) twice concurrently for the
+                                  // same issuance. No new global locking mechanism —
+                                  // scoped to this one button for this one interaction.
+        try {
+          await generate(state, container);
+        } finally {
+          nextBtn.disabled = false;
+        }
+        return;
+      }
       var error = validateStep(state);
       if (error) { window.HLMToast.error(error); return; }
       state.step++;
@@ -265,7 +278,28 @@
         graceDays: state.graceDays, maxUsers: state.maxUsers === -1 ? undefined : state.maxUsers
       }, 'new', actor);
       window.HLMToast.success('تم إصدار الترخيص بنجاح');
-      window.HLMLicenseResultModal.show(record, state.customer);
+
+      // PHASE C.1 — Operator Activation Code Delivery. License issuance
+      // above already succeeded and is fully persisted at this point;
+      // activation-code generation is a separate, independent operation
+      // and its own try/catch on purpose (§17/§18 of the approval): a
+      // failure here must NEVER be reported as a license-issuance
+      // failure, must NEVER re-issue the license, and must NEVER show a
+      // fake/placeholder code. `plaintextCode` stays undefined on
+      // failure — licenseResultModal.js already renders no activation-code
+      // section at all when it is absent, so nothing fake is ever shown.
+      var plaintextCode;
+      try {
+        var activationResult = await window.HLMLicenseIssuer.issueActivationCode({
+          licenseId: record.licenseFile.payload.licenseId,
+          customerId: state.customer.id
+        }, actor);
+        plaintextCode = activationResult.plaintextCode;
+      } catch (e) {
+        window.HLMToast.error('تم إصدار الترخيص بنجاح، لكن تعذّر توليد كود التفعيل');
+      }
+
+      window.HLMLicenseResultModal.show(record, state.customer, plaintextCode);
       window.HLMRouter.navigate('/customers/' + state.customer.id);
     } catch (e) {
       window.HLMToast.error(e.message === 'key_not_loaded' ? 'يجب تحميل مفتاح التوقيع أولًا' : 'حدث خطأ أثناء إصدار الترخيص');
