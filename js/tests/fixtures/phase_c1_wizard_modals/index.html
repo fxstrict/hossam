@@ -1,0 +1,129 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<div id="root"></div>
+<!-- Real production files under test -->
+<script src="/js/Shell.js"></script>
+<script src="/js/Toast.js"></script>
+<script src="/js/Modal.js"></script>
+<script>
+  // ---- Controlled test doubles (boundary stubs) — recorded for assertions ----
+  window.__spy = { calls: {}, record: function (name, args) { (this.calls[name] = this.calls[name] || []).push(args); } };
+
+  window.HLMKeySession = { isLoaded: function () { return true; } };
+  window.HLM_DEFAULT_SETTINGS = {
+    editions: ['Standard', 'Professional'],
+    subscriptionTypes: [{ value: 'yearly', label: 'سنوي' }],
+    modulesCatalogue: ['A', 'B'],
+    userTiers: [5, 10, -1],
+    defaultGraceDays: 7
+  };
+  window.HLMAuth = { currentUser: function () { return { id: 'op-1', name: 'Operator' }; } };
+
+  var FAKE_CUSTOMER = { id: 'cust-1', officeName: 'مكتب تجريبي', clientNumber: 'C-01', phone: '966500000000', email: 'test@example.com' };
+  window.HLMCustomersRepository = {
+    getAll: async function () { return [FAKE_CUSTOMER]; },
+    getById: async function (id) { return id === FAKE_CUSTOMER.id ? FAKE_CUSTOMER : null; },
+    search: async function () { return [FAKE_CUSTOMER]; }
+  };
+
+  var FAKE_ACTIVE_DEVICE = { id: 'dev-1', machineId: 'HSM-AAAA-BBBB-CCCC', status: 'active' };
+  window.HLMDevicesRepository = {
+    forCustomer: async function () { return window.__testMode === 'no-devices' ? [] : [FAKE_ACTIVE_DEVICE]; },
+    getById: async function (id) { return FAKE_ACTIVE_DEVICE; },
+    isValidMachineId: function (v) { return /^HSM-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(v); },
+    create: async function (fields, actor) {
+      window.__spy.record('devicesRepository.create', [fields, actor]);
+      return { id: 'dev-new-1', customerId: fields.customerId, machineId: fields.machineId, status: 'active' };
+    },
+    transfer: async function (deviceId, newMachineId, actor) {
+      window.__spy.record('devicesRepository.transfer', [deviceId, newMachineId, actor]);
+      return { id: 'dev-2', machineId: newMachineId, status: 'active' };
+    }
+  };
+  window.HLMSubscriptionsRepository = { forCustomer: async function () { return { type: 'yearly', edition: 'Professional', modules: [], graceDays: 7 }; } };
+
+  // The core boundary under scripted control: issue() and issueActivationCode().
+  // window.__issueBehavior / window.__codeBehavior: 'success' | 'fail'
+  var licenseCounter = 0;
+  window.__issueBehavior = 'success';
+  window.__codeBehavior = 'success';
+  window.HLMLicenseIssuer = {
+    issue: async function (fields, reason, actor) {
+      window.__spy.record('issue', [fields, reason, actor]);
+      if (window.__issueBehavior === 'fail') throw new Error('simulated issue() failure');
+      licenseCounter++;
+      var licenseId = 'HSM-LIC-' + reason.toUpperCase() + '-' + licenseCounter;
+      return { id: 'rec-' + licenseCounter, licenseFile: { v: 1, payload: { licenseId: licenseId, edition: fields.edition, type: fields.type, machineId: fields.machineId }, signature: 'fake-sig' } };
+    },
+    issueActivationCode: async function (fields, actor) {
+      window.__spy.record('issueActivationCode', [fields, actor]);
+      if (window.__codeBehavior === 'fail') throw new Error('simulated issueActivationCode() failure');
+      return { record: { id: 'code-rec-' + (++licenseCounter), licenseId: fields.licenseId, customerId: fields.customerId, activationCodeHash: 'deadbeef'.repeat(8), status: 'unused' }, plaintextCode: 'PLAINTEXT-CODE-FOR-' + fields.licenseId };
+    }
+  };
+  window.HLMLicenseResultModal = { show: function (record, customer, plaintextCode) { window.__spy.record('resultModal.show', [record, customer, plaintextCode]); } };
+  window.HLMRouter = { navigate: function (path) { window.__spy.record('router.navigate', [path]); } };
+</script>
+<script src="/js/licenseWizard.js"></script>
+<script src="/js/licenseModals.js"></script>
+<script>
+  window.__resetSpies = function () { window.__spy.calls = {}; licenseCounter = 0; };
+
+  window.__runWizardToStep7 = async function () {
+    var container = document.getElementById('root');
+    await window.HLMLicenseWizardScreen.render(container, {});
+    // Step 1: pick the (only) customer
+    document.querySelector('[data-cust]').click();
+    await new Promise(r => setTimeout(r, 0));
+    document.getElementById('hlmWizardNext').click();
+    await new Promise(r => setTimeout(r, 0));
+    // Step 2: use "new device" toggle with a valid machine id
+    document.getElementById('hlmWizNewDeviceToggle').click();
+    var mid = document.getElementById('hlmWizNewMachineId');
+    mid.value = 'HSM-DDDD-EEEE-FFFF';
+    mid.dispatchEvent(new Event('input'));
+    document.getElementById('hlmWizardNext').click();
+    await new Promise(r => setTimeout(r, 0));
+    // Steps 3-6: accept defaults, just advance
+    for (var i = 0; i < 4; i++) {
+      document.getElementById('hlmWizardNext').click();
+      await new Promise(r => setTimeout(r, 0));
+    }
+    // Now at step 7 ("إنشاء الترخيص")
+  };
+
+  window.__clickGenerateAndWait = async function () {
+    document.getElementById('hlmWizardNext').click();
+    await new Promise(r => setTimeout(r, 30));
+  };
+
+  window.__isGenerateButtonDisabled = function () {
+    return document.getElementById('hlmWizardNext').disabled;
+  };
+
+  window.__clickGenerateTwiceRapidly = async function () {
+    var btn = document.getElementById('hlmWizardNext');
+    btn.click();
+    var disabledRightAfterFirstClick = btn.disabled;
+    btn.click(); // second click while (supposedly) disabled — should be a no-op if guard works
+    await new Promise(r => setTimeout(r, 30));
+    return disabledRightAfterFirstClick;
+  };
+
+  window.__clickTransferConfirmTwiceRapidly = async function () {
+    // Uses direct, synchronous DOM .click() calls (not Playwright's
+    // page.click(), which auto-waits for "actionable" and would race
+    // against the real HLMModal.close() this handler triggers on
+    // success — an element that gets removed from the DOM mid-wait is
+    // a Playwright timeout, not a product bug). This mirrors exactly
+    // how a genuine double-click event dispatch would behave.
+    var btn = document.getElementById('hlmTransferConfirm');
+    btn.click();
+    var disabledRightAfterFirstClick = btn.disabled;
+    btn.click();
+    await new Promise(r => setTimeout(r, 30));
+    return disabledRightAfterFirstClick;
+  };
+</script>
+</body></html>
