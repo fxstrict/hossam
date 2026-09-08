@@ -70,10 +70,36 @@
     return 'mailto:' + encodeURIComponent(email || '') + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
   }
 
+  /**
+   * PHASE C v3/v3.1/v3.2 — issues one new Activation Code for an
+   * already-issued license. Does NOT touch LicenseCore/ECDSA/the .hsm
+   * signing flow at all (Activation Codes are a wholly separate
+   * artifact from the signed license file) — see
+   * ActivationCodesRepository.js for the generation/storage rules.
+   * @param {{licenseId:string, customerId?:string, expiresAt?:string}} fields
+   * @returns {Promise<{record:Object, plaintextCode:string}>}
+   */
+  async function issueActivationCode(fields, actor) {
+    return window.HLMActivationCodesRepository.generateForLicense({
+      licenseId: fields.licenseId,
+      customerId: fields.customerId,
+      expiresAt: fields.expiresAt
+    }, actor);
+  }
+
+  /** Row to paste into elhossam's "أكواد_التفعيل" Google Sheet tab —
+   *  see ActivationCodesRepository.buildActivationCodeSheetRow() for
+   *  why this manual-transfer step exists (this tool has no server). */
+  function buildActivationCodeSheetRow(record) {
+    return window.HLMActivationCodesRepository.buildActivationCodeSheetRow(record);
+  }
+
   window.HLMLicenseIssuer = {
     issue: issue,
     downloadLicenseFile: downloadLicenseFile,
     whatsappShareLink: whatsappShareLink,
-    mailtoLink: mailtoLink
+    mailtoLink: mailtoLink,
+    issueActivationCode: issueActivationCode,
+    buildActivationCodeSheetRow: buildActivationCodeSheetRow
   };
 })(typeof window !== 'undefined' ? window : globalThis);
