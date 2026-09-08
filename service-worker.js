@@ -11,7 +11,7 @@
  */
 'use strict';
 
-var CACHE_VERSION = 'hlm-v1';
+var CACHE_VERSION = 'hlm-v2';
 var PRECACHE = [
   './',
   'index.html',
