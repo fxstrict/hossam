@@ -13,7 +13,7 @@
   'use strict';
 
   var DB_NAME = 'hlm_license_manager_pro';
-  var DB_VERSION = 1;
+  var DB_VERSION = 2; // PHASE C v3/v3.1/v3.2 — added `activationCodes` store (1 → 2). Additive only: every existing store/index is created unconditionally on every onupgradeneeded pass regardless of DB_VERSION (see below), so this bump touches ONLY the new store — no existing data is read, moved, or dropped. This DB_VERSION is entirely separate from and unrelated to elhossam's own protected IndexedDBSchema.js/DB_VERSION.
 
   var STORES = {
     customers: { keyPath: 'id', indexes: ['officeName', 'lawyerName', 'phone', 'email', 'governorate', 'clientNumber', 'status'] },
@@ -23,7 +23,12 @@
     payments: { keyPath: 'id', indexes: ['customerId', 'invoiceNumber', 'status', 'date'] },
     users: { keyPath: 'id', indexes: ['username', 'role'] },
     auditLog: { keyPath: 'id', indexes: ['at', 'actorId', 'entity', 'entityId'] },
-    settings: { keyPath: 'key', indexes: [] }
+    settings: { keyPath: 'key', indexes: [] },
+    // PHASE C v3/v3.1/v3.2 — local bookkeeping of activation codes this
+    // tool has generated (hash + status only; the plaintext code is
+    // NEVER persisted here, same rule as the server side — see
+    // js/repositories/ActivationCodesRepository.js).
+    activationCodes: { keyPath: 'id', indexes: ['licenseId', 'activationCodeHash', 'status'] }
   };
 
   var _dbPromise = null;
