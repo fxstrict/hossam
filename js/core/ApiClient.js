@@ -102,8 +102,64 @@
     }
   }
 
+  /**
+   * PHASE F.3.2 — Installation Credential Recovery (Model 3).
+   *
+   * A wholly SEPARATE function from setLicenseStatus() above — never an
+   * overload or variant of it. This keeps the F.2 revocation trust
+   * domain (HOSSAM_REVOCATION_ADMIN_SECRET) and the new F.3.2 recovery
+   * trust domain (HOSSAM_RECOVERY_ADMIN_SECRET) textually and
+   * structurally separate in this file, per F.3.1's explicit Invariant
+   * 10 ("F.2 authorization remains separate").
+   *
+   * @param {string} baseUrl
+   * @param {{licenseId:string, machineId:string, recoveryAuth:string, requestId:string}} fields
+   * @param {number} [timeoutMs]
+   * @returns {Promise<{networkError:boolean, data:?Object}>} same shape/
+   *   semantics as setLicenseStatus() above — never throws.
+   */
+  async function recoverInstallationCredential(baseUrl, fields, timeoutMs) {
+    var url = String(baseUrl || '').trim();
+    if (!url || !fields || !fields.licenseId || !fields.machineId || !fields.recoveryAuth || !fields.requestId) {
+      return { networkError: true, data: null };
+    }
+
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = null;
+    if (controller) {
+      timer = setTimeout(function () { controller.abort(); }, timeoutMs || DEFAULT_TIMEOUT_MS);
+    }
+
+    try {
+      var response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // same CORS-preflight-avoidance convention as setLicenseStatus() and elhossam's own client
+        body: JSON.stringify({
+          action: 'recoverInstallationCredential',
+          licenseId: fields.licenseId,
+          machineId: fields.machineId,
+          recoveryAuth: fields.recoveryAuth,
+          requestId: fields.requestId
+        }),
+        signal: controller ? controller.signal : undefined
+      });
+
+      var text = await response.text();
+      var parsed;
+      try { parsed = JSON.parse(text); }
+      catch (parseErr) { return { networkError: true, data: null }; }
+
+      return { networkError: false, data: parsed };
+    } catch (e) {
+      return { networkError: true, data: null };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   window.HLMApiClient = {
-    setLicenseStatus: setLicenseStatus
+    setLicenseStatus: setLicenseStatus,
+    recoverInstallationCredential: recoverInstallationCredential
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = window.HLMApiClient;
 })(typeof window !== 'undefined' ? window : globalThis);
