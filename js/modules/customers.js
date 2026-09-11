@@ -254,7 +254,8 @@
           '<td>' + (l.status === 'revoked' ? '<span class="hlm-badge hlm-badge--danger">ملغي</span>' : '<span class="hlm-badge hlm-badge--success">ساري</span>') + '</td>' +
           '<td class="hlm-nowrap">' +
             '<button class="hlm-btn hlm-btn--sm" data-download="' + l.id + '">تنزيل</button> ' +
-            (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm hlm-btn--danger" data-revoke="' + l.id + '">إلغاء</button>' : '') +
+            (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm hlm-btn--danger" data-revoke="' + l.id + '">إلغاء</button> ' : '') +
+            (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm" data-recover="' + l.id + '">استرجاع تثبيت</button>' : '') +
           '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
@@ -271,6 +272,10 @@
     });
     body.querySelectorAll('[data-revoke]').forEach(function (btn) {
       btn.addEventListener('click', function () { window.HLMLicenseModals.openRevoke(btn.getAttribute('data-revoke'), onChanged); });
+    });
+    // PHASE F.3.2 — Installation Credential Recovery (Model 3, additive-only).
+    body.querySelectorAll('[data-recover]').forEach(function (btn) {
+      btn.addEventListener('click', function () { window.HLMLicenseModals.openRecover(btn.getAttribute('data-recover')); });
     });
   }
 

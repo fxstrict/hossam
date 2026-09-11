@@ -283,5 +283,117 @@
     });
   }
 
-  window.HLMLicenseModals = { openRenew: openRenew, openTransfer: openTransfer, openRevoke: openRevoke };
+  /**
+   * PHASE F.3.2 — Installation Credential Recovery (Model 3).
+   *
+   * Wholly separate from openRevoke()/_openRemoteSync_() above: this
+   * recovers a customer's SERVER-SIDE installation credential (Config/
+   * 11_Auth.gs, "التثبيتات") — it has nothing to do with license status
+   * ("التراخيص") and does not touch, call, or reuse F.2's revocation
+   * secret/endpoint/UI in any way, per F.3.1's Invariant 10.
+   *
+   * @param {string} localDbId  the LMP-local license record id (same
+   *   convention as data-revoke/data-download elsewhere in this file —
+   *   the actual licenseId STRING is looked up from the record itself).
+   */
+  function openRecover(localDbId) {
+    window.HLMModal.open({
+      title: 'استرجاع بيانات اعتماد تثبيت',
+      body:
+        '<div class="hlm-field-hint" style="margin-bottom:12px;">' +
+          'هذا يُصدر بيانات اعتماد تثبيت جديدة لعميل فقد بياناته المحلية ' +
+          '(مثل مسح بيانات المتصفح بالكامل) على نفس الترخيص — ولا علاقة له ' +
+          'بإلغاء أو تعديل حالة الترخيص نفسه. لا يُنشئ تثبيتًا جديدًا ولا ' +
+          'يُغيّر ملف ".hsm" بأي شكل.' +
+        '</div>' +
+        '<div class="hlm-field"><label>رابط تطبيق ويب Apps Script للمكتب</label>' +
+          '<input type="url" id="hlmRecoverUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>' +
+        '<div class="hlm-field"><label>معرّف الجهاز الحالي (machineId) كما يظهر للعميل الآن</label>' +
+          '<input type="text" id="hlmRecoverMachineId" placeholder="HSM-XXXX-XXXX-XXXX"></div>' +
+        '<div class="hlm-field"><label>مفتاح الاسترجاع الإداري (منفصل عن مفتاح إلغاء الترخيص، لن يُحفظ)</label>' +
+          '<input type="password" id="hlmRecoverSecret" autocomplete="off"></div>' +
+        '<div class="hlm-field-hint" id="hlmRecoverStatus" style="margin-top:8px;"></div>',
+      footer: '<button class="hlm-btn" id="hlmRecoverCancel">تراجع</button>' +
+        '<button class="hlm-btn hlm-btn--primary" id="hlmRecoverConfirm">تنفيذ الاسترجاع</button>',
+      onMount: function () {
+        document.getElementById('hlmRecoverCancel').addEventListener('click', window.HLMModal.close);
+        document.getElementById('hlmRecoverConfirm').addEventListener('click', async function () {
+          var confirmBtn = document.getElementById('hlmRecoverConfirm');
+          var statusEl = document.getElementById('hlmRecoverStatus');
+          var baseUrl = document.getElementById('hlmRecoverUrl').value.trim();
+          var machineId = document.getElementById('hlmRecoverMachineId').value.trim();
+          var secretInput = document.getElementById('hlmRecoverSecret');
+          var recoveryAuth = secretInput.value; // held only in this local var
+
+          if (!baseUrl || !machineId || !recoveryAuth) {
+            statusEl.textContent = 'يرجى تعبئة رابط السيرفر ومعرّف الجهاز ومفتاح الاسترجاع.';
+            return;
+          }
+
+          var lic;
+          try {
+            lic = await window.HLMLicensesRepository.getById(localDbId);
+          } catch (e) {
+            statusEl.textContent = 'تعذّر قراءة سجل الترخيص محليًا.';
+            return;
+          }
+          if (!lic || !lic.licenseId) {
+            statusEl.textContent = 'سجل الترخيص غير موجود.';
+            return;
+          }
+
+          confirmBtn.disabled = true;
+          statusEl.textContent = 'جارٍ الاتصال بالسيرفر...';
+
+          var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+
+          var result = await window.HLMApiClient.recoverInstallationCredential(baseUrl, {
+            licenseId: lic.licenseId,
+            machineId: machineId,
+            recoveryAuth: recoveryAuth,
+            requestId: requestId
+          });
+
+          // Clear the secret immediately after the call returns, regardless
+          // of outcome — mirrors the exact discipline used in
+          // _openRemoteSync_() above (F.2 mandate §20/§25, applied here
+          // identically for the new, separate recovery secret).
+          secretInput.value = '';
+          recoveryAuth = null;
+
+          if (result.networkError) {
+            confirmBtn.disabled = false;
+            statusEl.textContent = 'تعذّر الاتصال بالسيرفر (فشل شبكة أو مهلة). لم يتغيّر شيء على السيرفر بالضرورة — يمكنك المحاولة مجددًا.';
+            return;
+          }
+
+          var data = result.data || {};
+          if (data.success) {
+            confirmBtn.disabled = true;
+            statusEl.innerHTML =
+              '<div style="margin-bottom:6px;">تم الاسترجاع بنجاح. سلّم بيانات الاعتماد التالية للعميل ليُدخلها فى التطبيق (لن تظهر مرة أخرى):</div>' +
+              '<div class="hlm-license-file">installationId: ' + esc(data.installationId) + '\ncredential: ' + esc(data.credential) + '</div>';
+            window.HLMToast.success('تم استرجاع بيانات اعتماد التثبيت');
+          } else {
+            confirmBtn.disabled = false;
+            var errorMessages = {
+              UNAUTHORIZED: 'مفتاح الاسترجاع غير صحيح.',
+              SERVER_NOT_CONFIGURED: 'السيرفر غير مُهيَّأ لهذه العملية بعد (لم يُضبَط مفتاح الاسترجاع على الخادم).',
+              MALFORMED_REQUEST: 'بيانات الطلب ناقصة.',
+              NOT_FOUND: 'لم يُعثر على تثبيت مرتبط بهذا الترخيص على هذا السيرفر.',
+              AMBIGUOUS_LICENSE_ID: 'يوجد أكثر من تثبيت بنفس رقم الترخيص على السيرفر — لم يتغيّر شيء، يلزم تصحيح البيانات يدويًا أولًا.',
+              INSTALLATION_REVOKED: 'هذا التثبيت مُلغى — لا يمكن استرجاعه.',
+              LICENSE_REVOKED: 'هذا الترخيص مُلغى أو مُنقول — لا يمكن استرجاع تثبيت مرتبط به.',
+              LOCK_TIMEOUT: 'السيرفر مشغول حاليًا، حاول مجددًا.',
+              UNKNOWN_ERROR: 'حدث خطأ داخلي على السيرفر.'
+            };
+            statusEl.textContent = errorMessages[data.status] || ('فشلت العملية: ' + (data.status || 'غير معروف'));
+            window.HLMToast.error('فشل استرجاع بيانات اعتماد التثبيت');
+          }
+        });
+      }
+    });
+  }
+
+  window.HLMLicenseModals = { openRenew: openRenew, openTransfer: openTransfer, openRevoke: openRevoke, openRecover: openRecover };
 })(typeof window !== 'undefined' ? window : globalThis);
