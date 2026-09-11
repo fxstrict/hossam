@@ -64,5 +64,33 @@
     };
   };
 
+  /**
+   * PHASE F.2 — Automated License Revocation Write Path.
+   * Builds the request payload for the NEW apiSetLicenseStatus endpoint
+   * (Config/09_License.gs). Deliberately a SEPARATE function from
+   * buildRevokeSheetRow() above rather than a change to its existing
+   * output contract — buildRevokeSheetRow() continues to serve the manual
+   * copy-paste fallback exactly as before (F.2 mandate §22/§26: the
+   * manual fallback must keep working unmodified, and the automated
+   * request must not depend on the manual row's shape).
+   *
+   * Does NOT include adminSecret — that is supplied separately, at call
+   * time, by js/modules/licenseModals.js, and is never persisted on this
+   * repository or on the resulting request object (F.2 mandate §20).
+   *
+   * @param {Object} licenseRecord  a record from this.recordIssued()/this.getById()
+   * @param {'active'|'revoked'} status  the only two values the new server
+   *   endpoint accepts — validated again server-side regardless.
+   * @param {string} [note]
+   * @returns {{licenseId:string, status:string, note:string}}
+   */
+  LicensesRepository.prototype.buildLicenseStatusRequest = function (licenseRecord, status, note) {
+    return {
+      licenseId: licenseRecord.licenseId,
+      status: status,
+      note: note || ''
+    };
+  };
+
   window.HLMLicensesRepository = new LicensesRepository();
 })(typeof window !== 'undefined' ? window : globalThis);
