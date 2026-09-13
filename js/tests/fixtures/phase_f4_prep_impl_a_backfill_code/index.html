@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<div id="root"></div>
+<!-- Real production file under test: licenseModals.js (unmodified, copied
+     as-is from js/modules/). Shell.js/Toast.js/Modal.js are also the real,
+     unmodified production files (same convention as
+     phase_c1_wizard_modals/index.html). -->
+<script src="/js/Shell.js"></script>
+<script src="/js/Toast.js"></script>
+<script src="/js/Modal.js"></script>
+<script>
+  // ---- Controlled test doubles (boundary stubs) — recorded for assertions ----
+  window.__spy = { calls: {}, record: function (name, args) { (this.calls[name] = this.calls[name] || []).push(args); } };
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: function (text) { window.__spy.record('clipboard.writeText', [text]); return Promise.resolve(); } }
+  });
+
+  window.HLMAuth = { currentUser: function () { return { id: 'op-1', name: 'Operator' }; } };
+
+  // window.__licenseLookup controls what HLMLicensesRepository.getById()
+  // returns per test case: 'has-licenseId' | 'missing-licenseId' | 'not-found'
+  window.__licenseLookup = 'has-licenseId';
+  var FAKE_LICENSE = { id: 'rec-1', licenseId: 'HSM-LIC-EXISTING-1', customerId: 'cust-1', status: 'active' };
+  window.HLMLicensesRepository = {
+    getById: async function (id) {
+      window.__spy.record('licensesRepository.getById', [id]);
+      if (window.__licenseLookup === 'not-found') return null;
+      if (window.__licenseLookup === 'missing-licenseId') return { id: id, customerId: 'cust-1' };
+      return FAKE_LICENSE;
+    }
+  };
+
+  // The generation-pipeline boundary under scripted control:
+  // issueActivationCode() / buildActivationCodeSheetRow().
+  // window.__codeBehavior: 'success' | 'fail'
+  window.__codeBehavior = 'success';
+  var codeCounter = 0;
+  window.HLMLicenseIssuer = {
+    issueActivationCode: async function (fields, actor) {
+      window.__spy.record('issueActivationCode', [fields, actor]);
+      if (window.__codeBehavior === 'fail') throw new Error('simulated issueActivationCode() failure');
+      codeCounter++;
+      return {
+        record: { id: 'code-rec-' + codeCounter, licenseId: fields.licenseId, customerId: fields.customerId, activationCodeHash: 'deadbeef'.repeat(8), status: 'unused', createdAt: '2026-01-01T00:00:00.000Z', expiresAt: '' },
+        plaintextCode: 'PLAINTEXT-CODE-FOR-' + fields.licenseId + '-' + codeCounter
+      };
+    },
+    buildActivationCodeSheetRow: function (record) {
+      window.__spy.record('buildActivationCodeSheetRow', [record]);
+      return { id: record.id, licenseId: record.licenseId, activationCodeHash: record.activationCodeHash, status: record.status, createdAt: record.createdAt, expiresAt: record.expiresAt || '', usedAt: '', installationId: '' };
+    }
+  };
+</script>
+<script src="/js/licenseModals.js"></script>
+<script>
+  window.__resetSpies = function () { window.__spy.calls = {}; codeCounter = 0; };
+
+  window.__openBackfill = function (localDbId) {
+    window.HLMLicenseModals.openBackfillActivationCode(localDbId || 'rec-1');
+  };
+
+  window.__clickConfirmAndWait = async function () {
+    document.getElementById('hlmBackfillConfirm').click();
+    await new Promise(r => setTimeout(r, 30));
+  };
+
+  window.__clickConfirmTwiceRapidly = async function () {
+    var btn = document.getElementById('hlmBackfillConfirm');
+    btn.click();
+    var disabledRightAfterFirstClick = btn.disabled;
+    btn.click(); // second click while (supposedly) disabled — should be a no-op if the guard works
+    await new Promise(r => setTimeout(r, 30));
+    return disabledRightAfterFirstClick;
+  };
+
+  window.__clickCancel = function () {
+    document.getElementById('hlmBackfillCancel').click();
+  };
+
+  window.__isConfirmationModalOpen = function () {
+    return !!document.getElementById('hlmBackfillConfirm');
+  };
+
+  window.__isErrorShown = function () {
+    var el = document.getElementById('hlmBackfillCodeError');
+    return !!el && !el.classList.contains('hlm-hidden');
+  };
+
+  window.__resultCodeText = function () {
+    var el = document.getElementById('hlmBackfillCodeValue');
+    return el ? el.textContent : null;
+  };
+
+  window.__resultRowText = function () {
+    var el = document.querySelector('.hlm-license-file');
+    return el ? el.textContent : null;
+  };
+
+  window.__clickCopyCode = function () { document.getElementById('hlmBackfillCopyCode').click(); };
+  window.__clickCopyRow = function () { document.getElementById('hlmBackfillCopyRow').click(); };
+  window.__clickDone = function () { document.getElementById('hlmBackfillDone').click(); };
+</script>
+</body></html>
