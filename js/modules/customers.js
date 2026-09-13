@@ -255,7 +255,11 @@
           '<td class="hlm-nowrap">' +
             '<button class="hlm-btn hlm-btn--sm" data-download="' + l.id + '">تنزيل</button> ' +
             (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm hlm-btn--danger" data-revoke="' + l.id + '">إلغاء</button> ' : '') +
-            (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm" data-recover="' + l.id + '">استرجاع تثبيت</button>' : '') +
+            (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm" data-recover="' + l.id + '">استرجاع تثبيت</button> ' : '') +
+            // PHASE F.4-PREP-IMPL-A — additive only, same permission gate as
+            // data-revoke/data-recover above (all three are sensitive,
+            // operator-mediated license-installation actions).
+            (l.status !== 'revoked' && window.HLMAuth.hasPermission('licenses.revoke') ? '<button class="hlm-btn hlm-btn--sm" data-backfill-code="' + l.id + '">إنشاء كود تفعيل جديد</button>' : '') +
           '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
@@ -276,6 +280,10 @@
     // PHASE F.3.2 — Installation Credential Recovery (Model 3, additive-only).
     body.querySelectorAll('[data-recover]').forEach(function (btn) {
       btn.addEventListener('click', function () { window.HLMLicenseModals.openRecover(btn.getAttribute('data-recover')); });
+    });
+    // PHASE F.4-PREP-IMPL-A — Activation-Code Backfill (LMP UI wiring, additive-only).
+    body.querySelectorAll('[data-backfill-code]').forEach(function (btn) {
+      btn.addEventListener('click', function () { window.HLMLicenseModals.openBackfillActivationCode(btn.getAttribute('data-backfill-code')); });
     });
   }
 

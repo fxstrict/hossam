@@ -395,5 +395,118 @@
     });
   }
 
-  window.HLMLicenseModals = { openRenew: openRenew, openTransfer: openTransfer, openRevoke: openRevoke, openRecover: openRecover };
+  /**
+   * PHASE F.4-PREP-IMPL-A — Activation-Code Backfill (LMP UI wiring only).
+   *
+   * Generates a NEW activation code for an EXISTING, already-issued
+   * license via the exact same generation pipeline used everywhere else
+   * in this file (window.HLMLicenseIssuer.issueActivationCode() /
+   * buildActivationCodeSheetRow() — see LicenseIssuer.js /
+   * ActivationCodesRepository.js). This does NOT call issue(): no new
+   * license/.hsm file is produced, no ECDSA signing happens, and the
+   * existing license's licenseId/edition/expiry/etc. are all left
+   * untouched — only a fresh Activation Code row is created for it.
+   *
+   * This does NOT touch Apps Script and does NOT determine whether an
+   * installation row already exists for this license on the server —
+   * see the confirmation copy below (recovery-first rule, per the
+   * F.4-PREP forensic design report). That determination remains an
+   * operator procedure for this phase, same as F.3.2's openRecover()
+   * above being the correct tool when a prior installation is known.
+   *
+   * @param {string} localDbId  the LMP-local license record id, same
+   *   convention as data-revoke/data-recover/data-download elsewhere in
+   *   this file — the actual licenseId STRING is read from the record
+   *   itself, never typed manually by the operator.
+   */
+  function openBackfillActivationCode(localDbId) {
+    window.HLMModal.open({
+      title: 'إنشاء كود تفعيل جديد لهذه الرخصة',
+      body:
+        '<div class="hlm-field-hint" style="margin-bottom:12px;">' +
+          'هذا الإجراء مخصص لإعادة تسجيل تثبيت لرخصة موجودة بعد التأكد ' +
+          'أولًا من عدم وجود سجل تثبيت لها. إذا كان للرخصة سجل تثبيت ' +
+          'موجود، استخدم "استرجاع تثبيت" بدلًا من إنشاء كود جديد — ' +
+          'تسجيل كود جديد على تثبيت له سجل بالفعل قد يُنشئ سجل تثبيت ' +
+          'مكرر على السيرفر.' +
+        '</div>' +
+        '<div id="hlmBackfillCodeError" class="hlm-field-error hlm-hidden"></div>',
+      footer: '<button class="hlm-btn" id="hlmBackfillCancel">تراجع</button>' +
+        '<button class="hlm-btn hlm-btn--primary" id="hlmBackfillConfirm">تأكيد — إنشاء كود جديد</button>',
+      onMount: function () {
+        document.getElementById('hlmBackfillCancel').addEventListener('click', window.HLMModal.close);
+        document.getElementById('hlmBackfillConfirm').addEventListener('click', async function () {
+          var confirmBtn = this;
+          var errEl = document.getElementById('hlmBackfillCodeError');
+          confirmBtn.disabled = true; // PHASE F.4-PREP-IMPL-A — same in-flight/double-click
+                                       // guard convention as openRenew()/openTransfer() above:
+                                       // set before any async work in this handler.
+          var lic;
+          try {
+            lic = await window.HLMLicensesRepository.getById(localDbId);
+          } catch (e) {
+            lic = null;
+          }
+          // Identity safety (F.4-PREP-IMPL-A §8): the source of truth is
+          // the existing license record only — no manual licenseId entry.
+          // Nothing is generated and nothing is persisted if it's missing.
+          if (!lic || !lic.licenseId) {
+            errEl.textContent = 'تعذّر العثور على معرّف الترخيص لهذا السجل — لم يتم إنشاء أي كود.';
+            errEl.classList.remove('hlm-hidden');
+            confirmBtn.disabled = false;
+            return;
+          }
+          try {
+            var actor = window.HLMAuth.currentUser();
+            var activationResult = await window.HLMLicenseIssuer.issueActivationCode({
+              licenseId: lic.licenseId,
+              customerId: lic.customerId
+            }, actor);
+            var row = window.HLMLicenseIssuer.buildActivationCodeSheetRow(activationResult.record);
+            window.HLMModal.close();
+            _showBackfillActivationCodeResult_(lic.licenseId, activationResult.plaintextCode, row);
+          } catch (e) {
+            errEl.textContent = 'حدث خطأ أثناء إنشاء كود التفعيل.';
+            errEl.classList.remove('hlm-hidden');
+            confirmBtn.disabled = false;
+          }
+        });
+      }
+    });
+  }
+
+  /** Displays the freshly generated backfill code + the existing
+   *  buildActivationCodeSheetRow() row, using the exact same
+   *  manual-transfer copy/paste pattern as openRevoke()'s result step
+   *  above (this tool has no server — see ActivationCodesRepository.js). */
+  function _showBackfillActivationCodeResult_(licenseId, plaintextCode, row) {
+    window.HLMModal.open({
+      title: 'كود تفعيل جديد — ' + licenseId,
+      body:
+        '<div class="hlm-field" style="margin-bottom:16px;padding:12px;border:1px dashed #999;border-radius:8px;">' +
+          '<label style="font-weight:800;">كود التفعيل</label>' +
+          '<div id="hlmBackfillCodeValue" style="font-family:monospace;font-size:15px;font-weight:800;letter-spacing:1px;margin:6px 0;">' + esc(plaintextCode) + '</div>' +
+        '</div>' +
+        '<div class="hlm-license-file">' + esc(JSON.stringify(row, null, 2)) + '</div>' +
+        '<div class="hlm-field-hint" style="margin-top:10px;">انسخ هذا الصف والصقه في تبويب "أكواد_التفعيل" بجدول جوجل شيتس الخاص بالحسام لإكمال العملية، حسب طريقة العمل الحالية.</div>',
+      footer: '<button class="hlm-btn" id="hlmBackfillCopyCode">نسخ كود التفعيل</button>' +
+        '<button class="hlm-btn" id="hlmBackfillCopyRow">نسخ الصف</button>' +
+        '<button class="hlm-btn hlm-btn--primary" id="hlmBackfillDone">تم</button>',
+      onMount: function () {
+        document.getElementById('hlmBackfillDone').addEventListener('click', window.HLMModal.close);
+        document.getElementById('hlmBackfillCopyCode').addEventListener('click', function () {
+          navigator.clipboard.writeText(plaintextCode).then(function () {
+            window.HLMToast.success('تم نسخ كود التفعيل');
+          }).catch(function () { window.HLMToast.error('تعذّر نسخ كود التفعيل'); });
+        });
+        document.getElementById('hlmBackfillCopyRow').addEventListener('click', function () {
+          navigator.clipboard.writeText(JSON.stringify(row)).then(function () {
+            window.HLMToast.success('تم نسخ الصف');
+          }).catch(function () { window.HLMToast.error('تعذّر نسخ الصف'); });
+        });
+      }
+    });
+  }
+
+  window.HLMLicenseModals = { openRenew: openRenew, openTransfer: openTransfer, openRevoke: openRevoke, openRecover: openRecover, openBackfillActivationCode: openBackfillActivationCode };
 })(typeof window !== 'undefined' ? window : globalThis);
