@@ -500,7 +500,25 @@
           }).catch(function () { window.HLMToast.error('تعذّر نسخ كود التفعيل'); });
         });
         document.getElementById('hlmBackfillCopyRow').addEventListener('click', function () {
-          navigator.clipboard.writeText(JSON.stringify(row)).then(function () {
+          // PHASE G.4 — was navigator.clipboard.writeText(JSON.stringify(row)),
+          // which copies one JSON-blob string. Google Sheets only splits
+          // pasted clipboard text into separate columns when the values are
+          // separated by literal Tab characters — a JSON string has none,
+          // so the whole blob always landed in a single cell and
+          // activationCodeHash never reached its own column, making every
+          // registerInstallation() lookup against "أكواد_التفعيل" fail with
+          // INVALID_ACTIVATION even when the operator pasted exactly as
+          // instructed. Field order below is pinned explicitly to match
+          // ACTIVATION_CODES_HEADERS in elhossam/Config/11_Auth.gs — see
+          // ActivationCodesRepository.js buildActivationCodeSheetRow() for
+          // the authoritative source of these eight field names, which is
+          // left completely unchanged by this fix.
+          var ACTIVATION_ROW_FIELD_ORDER = ['id', 'licenseId', 'activationCodeHash', 'status', 'createdAt', 'expiresAt', 'usedAt', 'installationId'];
+          var tsvRow = ACTIVATION_ROW_FIELD_ORDER.map(function (fieldName) {
+            var v = row[fieldName];
+            return (v === undefined || v === null) ? '' : String(v);
+          }).join('\t');
+          navigator.clipboard.writeText(tsvRow).then(function () {
             window.HLMToast.success('تم نسخ الصف');
           }).catch(function () { window.HLMToast.error('تعذّر نسخ الصف'); });
         });
