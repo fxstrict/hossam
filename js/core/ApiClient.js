@@ -62,7 +62,9 @@
   async function setLicenseStatus(baseUrl, fields, timeoutMs) {
     var url = String(baseUrl || '').trim();
     if (!url || !fields || !fields.licenseId || !fields.status || !fields.adminSecret) {
-      return { networkError: true, data: null };
+      // PHASE G.4 — networkErrorReason is a pure additive diagnostic field;
+      // existing callers that only read {networkError, data} are unaffected.
+      return { networkError: true, networkErrorReason: 'empty_or_malformed_input', data: null };
     }
 
     var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -88,7 +90,7 @@
       var text = await response.text();
       var parsed;
       try { parsed = JSON.parse(text); }
-      catch (parseErr) { return { networkError: true, data: null }; }
+      catch (parseErr) { return { networkError: true, networkErrorReason: 'non_json_response', data: null }; }
 
       return { networkError: false, data: parsed };
     } catch (e) {
@@ -96,7 +98,11 @@
       // failure — uniformly reported as networkError, never surfaced
       // with the secret or the raw exception (which could theoretically
       // echo request internals in some environments).
-      return { networkError: true, data: null };
+      // PHASE G.4 — additive only: distinguishes an aborted/timed-out
+      // request (e.name === 'AbortError', set by the AbortController
+      // above) from any other fetch-level failure, without changing the
+      // networkError:true contract any existing caller relies on.
+      return { networkError: true, networkErrorReason: (e && e.name === 'AbortError') ? 'timeout' : 'fetch_failed', data: null };
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -121,7 +127,7 @@
   async function recoverInstallationCredential(baseUrl, fields, timeoutMs) {
     var url = String(baseUrl || '').trim();
     if (!url || !fields || !fields.licenseId || !fields.machineId || !fields.recoveryAuth || !fields.requestId) {
-      return { networkError: true, data: null };
+      return { networkError: true, networkErrorReason: 'empty_or_malformed_input', data: null };
     }
 
     var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -147,11 +153,13 @@
       var text = await response.text();
       var parsed;
       try { parsed = JSON.parse(text); }
-      catch (parseErr) { return { networkError: true, data: null }; }
+      catch (parseErr) { return { networkError: true, networkErrorReason: 'non_json_response', data: null }; }
 
       return { networkError: false, data: parsed };
     } catch (e) {
-      return { networkError: true, data: null };
+      // PHASE G.4 — see setLicenseStatus() above for the same additive
+      // reasoning; identical timeout-vs-other-failure distinction.
+      return { networkError: true, networkErrorReason: (e && e.name === 'AbortError') ? 'timeout' : 'fetch_failed', data: null };
     } finally {
       if (timer) clearTimeout(timer);
     }
